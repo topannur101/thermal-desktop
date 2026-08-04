@@ -80,15 +80,31 @@ class ThermalCamera:
             
             return temp_celsius, color_frame
 
+        elif len(frame.shape) == 3 and frame.shape[2] == 2:
+            # 2-channel frame (e.g. YUYV / YUV422 packed) — extract luma channel
+            grey = frame[:, :, 0]
+            raw_data = grey.astype(np.float32)
+
+            # Rough estimate from the luma channel
+            temp_celsius = 15.0 + (raw_data / 255.0) * 25.0
+
+            normalized_grey = cv2.normalize(grey, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            color_frame = cv2.applyColorMap(normalized_grey, cv2.COLORMAP_INFERNO)
+            return temp_celsius, color_frame
+
         else:
             # We got a standard color image (Windows transcoded it or camera's built-in feed).
             # We convert it back to grey to estimate temp.
-            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if len(frame.shape) == 2:
+                # Already single-channel greyscale
+                grey = frame
+            else:
+                grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             raw_data = grey.astype(np.float32)
-            
+
             # Rough estimate from transcoded grey
             temp_celsius = 15.0 + (raw_data / 255.0) * 25.0
-            
+
             # Return the original frame directly to preserve its native colors
             return temp_celsius, frame
 
