@@ -514,56 +514,57 @@ class ThermalApp:
 
     # ── Mini2 Wrappers ────────────────────────────────────────────────────────
 
-    def _safe_mini2(self, fn, *args, **kwargs):
+    def _safe_mini2(self, method_name, *args, **kwargs):
         if self.mini2 is None:
             return
         try:
+            fn = getattr(self.mini2, method_name)
             fn(*args, **kwargs)
         except Exception as e:
             print(f"[Mini2] {e}")
 
     def _on_pseudo_color(self, event=None):
         self._update_color_preview(self.color_var.get())
-        self._safe_mini2(self.mini2.set_pseudo_color, PseudoColor[self.color_var.get()])
+        self._safe_mini2("set_pseudo_color", PseudoColor[self.color_var.get()])
 
     def _on_scene(self, event=None):
-        self._safe_mini2(self.mini2.set_scene, SceneMode[self.scene_var.get()])
+        self._safe_mini2("set_scene", SceneMode[self.scene_var.get()])
 
     def _on_flip(self, flip):
-        self._safe_mini2(self.mini2.set_flip, flip)
+        self._safe_mini2("set_flip", flip)
 
     def _on_brightness(self, val):
-        self._safe_mini2(self.mini2.set_brightness, int(val))
+        self._safe_mini2("set_brightness", int(val))
 
     def _on_contrast(self, val):
-        self._safe_mini2(self.mini2.set_contrast, int(val))
+        self._safe_mini2("set_contrast", int(val))
 
     def _on_detail(self, val):
-        self._safe_mini2(self.mini2.set_detail_enhancement, int(val))
+        self._safe_mini2("set_detail_enhancement", int(val))
 
     def _on_snr(self, val):
-        self._safe_mini2(self.mini2.set_snr, int(val))
+        self._safe_mini2("set_snr", int(val))
 
     def _on_tnr(self, val):
-        self._safe_mini2(self.mini2.set_tnr, int(val))
+        self._safe_mini2("set_tnr", int(val))
 
     def _on_zoom(self, val):
-        self._safe_mini2(self.mini2.set_zoom_centre, int(val))
+        self._safe_mini2("set_zoom_centre", int(val))
 
     def _do_nuc(self):
-        self._safe_mini2(self.mini2.do_shutter_calibration)
+        self._safe_mini2("do_shutter_calibration")
 
     def _do_bg_correction(self):
-        self._safe_mini2(self.mini2.do_background_correction)
+        self._safe_mini2("do_background_correction")
 
     def _on_auto_shutter(self, val):
-        self._safe_mini2(self.mini2.set_auto_shutter_switch, val)
+        self._safe_mini2("set_auto_shutter_switch", val)
 
     def _on_burn_protection(self, val):
-        self._safe_mini2(self.mini2.set_burn_protection, val)
+        self._safe_mini2("set_burn_protection", val)
 
     def _set_shutter(self, val):
-        self._safe_mini2(self.mini2.set_shutter_position, val)
+        self._safe_mini2("set_shutter_position", val)
 
     def _reset_settings(self):
         defaults = {"Brightness": 50, "Contrast": 50, "Detail Enhance": 50, "SNR": 50, "TNR": 50}
