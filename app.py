@@ -3,6 +3,7 @@ import sys
 import os
 import tkinter as tk
 from tkinter import ttk
+from collections import deque
 import cv2
 import numpy as np
 
@@ -190,6 +191,12 @@ class ThermalApp:
         self.is_running = True
         self.camera = None
         self.mini2 = None
+
+        # Rolling temperature averages (5-frame window) for stable readings
+        self._hist_max = deque(maxlen=5)
+        self._hist_min = deque(maxlen=5)
+        self._hist_ctr = deque(maxlen=5)
+
         self._init_mini2()
         self._build_ui()
         self._refresh_cameras()
@@ -477,11 +484,15 @@ class ThermalApp:
         if self.camera:
             temp_array, color_frame = self.camera.get_frame()
             if temp_array is not None and color_frame is not None:
-                display = cv2.resize(color_frame, (640, 480), interpolation=cv2.INTER_CUBIC)
+                # Resize frame to the actual label dimensions so it always fills the area
+                lw = self.video_label.winfo_width()
+                lh = self.video_label.winfo_height()
+                if lw < 10 or lh < 10:          # widget not yet laid-out
+                    lw, lh = 640, 480
+                display = cv2.resize(color_frame, (lw, lh), interpolation=cv2.INTER_LINEAR)
 
                 # Crosshair
-                h, w = display.shape[:2]
-                cx, cy = w // 2, h // 2
+                cx, cy = lw // 2, lh // 2
                 cv2.drawMarker(display, (cx, cy), (255, 255, 255),
                                markerType=cv2.MARKER_CROSS, markerSize=22,
                                thickness=1, line_type=cv2.LINE_AA)
@@ -490,16 +501,21 @@ class ThermalApp:
                 blen, bt = 18, 2
                 green = (80, 200, 120)
                 for (x, y, sx, sy) in [
-                    (20, 20, 1, 1), (w - 20, 20, -1, 1),
-                    (20, h - 20, 1, -1), (w - 20, h - 20, -1, -1)
+                    (20, 20, 1, 1), (lw - 20, 20, -1, 1),
+                    (20, lh - 20, 1, -1), (lw - 20, lh - 20, -1, -1)
                 ]:
                     cv2.line(display, (x, y), (x + sx * blen, y), green, bt)
                     cv2.line(display, (x, y), (x, y + sy * blen), green, bt)
 
-                max_t = np.max(temp_array)
-                min_t = np.min(temp_array)
-                oh, ow = temp_array.shape
-                ctr_t = temp_array[oh // 2, ow // 2]
+                # Temperature — sample from raw temp_array, smooth with rolling avg
+                oh, ow = temp_array.shape[:2]
+                self._hist_max.append(float(np.max(temp_array)))
+                self._hist_min.append(float(np.min(temp_array)))
+                self._hist_ctr.append(float(temp_array[oh // 2, ow // 2]))
+
+                max_t = sum(self._hist_max) / len(self._hist_max)
+                min_t = sum(self._hist_min) / len(self._hist_min)
+                ctr_t = sum(self._hist_ctr) / len(self._hist_ctr)
 
                 self.max_temp_var.set(f"MAX   {max_t:.1f} C")
                 self.min_temp_var.set(f"MIN   {min_t:.1f} C")

@@ -56,57 +56,49 @@ class ThermalCamera:
         if not ret or frame is None:
             return None, None
 
-        # Determine how to process based on what Windows actually gave us
-        if frame.dtype == np.uint16 or (frame.dtype == np.uint8 and len(frame.shape) == 2):
-            # We got raw GREYSCALE data! (16-bit or 8-bit)
-            raw_data = frame.astype(np.float32)
+        # Print frame info once so the developer can see what the camera delivers
+        if not hasattr(self, '_frame_info_printed'):
+            print(f"[Camera] frame shape={frame.shape}, dtype={frame.dtype}")
+            self._frame_info_printed = True
 
-            # --- ESTIMATED TEMPERATURE CALCULATION ---
-            # NOTE: Every camera manufacturer maps grey values to Celsius differently.
-            # This is a generic estimation. If 16-bit, it often represents Kelvin * 10 or * 100.
-            # If 8-bit, it's heavily compressed and we have to guess based on standard room temps.
-            if frame.dtype == np.uint16:
-                 # E.g. raw value 30000 -> 300.00 K -> ~26.85 C
-                 temp_celsius = (raw_data / 100.0) - 273.15
+        # ── 16-bit raw (best quality) ─────────────────────────────────────────
+        if frame.dtype == np.uint16:
+            raw = frame.astype(np.float32)
+            temp_celsius = (raw / 100.0) - 273.15   # raw≈Kelvin*100
+            norm = cv2.normalize(frame, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            return temp_celsius, cv2.applyColorMap(norm, cv2.COLORMAP_INFERNO)
+
+        # ── 2-D uint8 ─────────────────────────────────────────────────────────
+        if frame.ndim == 2:
+            h, w = frame.shape
+            # V4L2 often returns YUYV as (H, W*2): Y bytes are at even columns
+            if w >= h * 2:
+                y = frame[:, 0::2]          # extract Y samples → true (H, W/2)
             else:
-                 # Very rough estimate for 8-bit grey: map 0-255 to 10C-40C roughly
-                 temp_celsius = 10.0 + (raw_data / 255.0) * 30.0
+                y = frame                   # already true greyscale
+            raw = y.astype(np.float32)
+            temp_celsius = 10.0 + (raw / 255.0) * 30.0
+            norm = cv2.normalize(y, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            return temp_celsius, cv2.applyColorMap(norm, cv2.COLORMAP_INFERNO)
 
-            # --- APPLY PSEUDO-COLOR ---
-            # To turn the grey image into a thermal look, we normalize it to 0-255 first
-            normalized_grey = cv2.normalize(frame, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-            # Apply a color map (COLORMAP_INFERNO or COLORMAP_JET)
-            color_frame = cv2.applyColorMap(normalized_grey, cv2.COLORMAP_INFERNO)
-            
-            return temp_celsius, color_frame
+        # ── 3-D array ─────────────────────────────────────────────────────────
+        channels = frame.shape[2]
 
-        elif len(frame.shape) == 3 and frame.shape[2] == 2:
-            # 2-channel frame (e.g. YUYV / YUV422 packed) — extract luma channel
-            grey = frame[:, :, 0]
-            raw_data = grey.astype(np.float32)
+        if channels == 2:
+            # (H, W, 2) YUYV: channel-0 is Y (luminance)
+            y = frame[:, :, 0]
+            raw = y.astype(np.float32)
+            temp_celsius = 10.0 + (raw / 255.0) * 30.0
+            norm = cv2.normalize(y, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            return temp_celsius, cv2.applyColorMap(norm, cv2.COLORMAP_INFERNO)
 
-            # Rough estimate from the luma channel
-            temp_celsius = 15.0 + (raw_data / 255.0) * 25.0
-
-            normalized_grey = cv2.normalize(grey, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-            color_frame = cv2.applyColorMap(normalized_grey, cv2.COLORMAP_INFERNO)
-            return temp_celsius, color_frame
-
-        else:
-            # We got a standard color image (Windows transcoded it or camera's built-in feed).
-            # We convert it back to grey to estimate temp.
-            if len(frame.shape) == 2:
-                # Already single-channel greyscale
-                grey = frame
-            else:
-                grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            raw_data = grey.astype(np.float32)
-
-            # Rough estimate from transcoded grey
-            temp_celsius = 15.0 + (raw_data / 255.0) * 25.0
-
-            # Return the original frame directly to preserve its native colors
-            return temp_celsius, frame
+        # channels == 3 or 4 — standard BGR / BGRA color image
+        if channels == 4:
+            frame = frame[:, :, :3]
+        grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        raw = grey.astype(np.float32)
+        temp_celsius = 15.0 + (raw / 255.0) * 25.0
+        return temp_celsius, frame
 
     def release(self):
         if self.cap:
