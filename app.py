@@ -262,9 +262,10 @@ class ThermalApp:
         AccentButton(cam_row, text="Connect", command=self._reconnect_camera).pack(side=tk.LEFT, padx=4)
 
         # Video canvas
-        vid_border = tk.Frame(left, bg=BORDER, bd=1, relief="flat")
-        vid_border.pack(fill=tk.BOTH, expand=True)
-        self.video_label = tk.Label(vid_border, bg="#000000")
+        self.vid_border = tk.Frame(left, bg=BORDER, bd=1, relief="flat")
+        self.vid_border.pack(fill=tk.BOTH, expand=True)
+        self.vid_border.pack_propagate(False)
+        self.video_label = tk.Label(self.vid_border, bg="#000000")
         self.video_label.pack(fill=tk.BOTH, expand=True)
 
         # Temperature bar
@@ -484,9 +485,9 @@ class ThermalApp:
         if self.camera:
             temp_array, color_frame = self.camera.get_frame()
             if temp_array is not None and color_frame is not None:
-                # Resize frame to the actual label dimensions so it always fills the area
-                lw = self.video_label.winfo_width()
-                lh = self.video_label.winfo_height()
+                # Resize frame to the actual container dimensions to avoid feedback loops
+                lw = self.vid_border.winfo_width() - 2  # subtract border
+                lh = self.vid_border.winfo_height() - 2
                 if lw < 10 or lh < 10:          # widget not yet laid-out
                     lw, lh = 640, 480
                 display = cv2.resize(color_frame, (lw, lh), interpolation=cv2.INTER_LINEAR)
